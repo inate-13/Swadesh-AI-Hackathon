@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react"
 import { Download, Mic, Pause, Play, Square, Trash2 } from "lucide-react"
-
+ import { processChunk } from "../../../lib/chunk-pipeline"
 import { Button } from "@my-better-t-app/ui/components/button"
 import {
   Card,
@@ -13,7 +13,8 @@ import {
 } from "@my-better-t-app/ui/components/card"
 import { LiveWaveform } from "@/components/ui/live-waveform"
 import { useRecorder, type WavChunk } from "@/hooks/use-recorder"
-
+import { useEffect } from "react"
+import { recoverChunks } from "../../../lib/recovery"
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
@@ -75,13 +76,40 @@ function ChunkRow({ chunk, index }: { chunk: WavChunk; index: number }) {
 }
 
 export default function RecorderPage() {
+  const [transcripts, setTranscripts] = useState<
+  { speaker: string; text: string }[]
+>([])
   const [deviceId] = useState<string | undefined>()
-  const { status, start, stop, pause, resume, chunks, elapsed, stream, clearChunks } =
-    useRecorder({ chunkDuration: 5, deviceId })
+  // const { status, start, stop, pause, resume, chunks, elapsed, stream, clearChunks } =
+  //   useRecorder({ chunkDuration: 5, deviceId })
+const { status, start, stop, pause, resume, chunks, elapsed, stream, clearChunks } =
+  useRecorder({
+    chunkDuration: 5,
+    deviceId,
+    onChunk: async (chunk) => {
+      const index = indexRef.current++
 
+      const text = await processChunk(
+        chunk,
+        sessionId.current,
+        index
+      )
+
+      // simple speaker assignment
+      const speaker = index % 2 === 0 ? "User 1" : "User 2"
+
+      setTranscripts((prev) => [
+        ...prev,
+        { speaker, text },
+      ])
+    },
+  })
   const isRecording = status === "recording"
   const isPaused = status === "paused"
   const isActive = isRecording || isPaused
+
+  const sessionId = useRef(`session-${Date.now()}`)
+const indexRef = useRef(0)
 
   const handlePrimary = useCallback(() => {
     if (isActive) {
@@ -90,7 +118,10 @@ export default function RecorderPage() {
       start()
     }
   }, [isActive, stop, start])
-
+  //for recovery
+useEffect(() => {
+  recoverChunks(sessionId.current)
+}, [])
   return (
     <div className="container mx-auto flex max-w-lg flex-col items-center gap-6 px-4 py-8">
       <Card className="w-full">
@@ -194,6 +225,21 @@ export default function RecorderPage() {
           </CardContent>
         </Card>
       )}
+
+      {transcripts.length > 0 && (
+  <Card className="w-full">
+    <CardHeader>
+      <CardTitle>Transcript</CardTitle>
+    </CardHeader>
+    <CardContent className="flex flex-col gap-2">
+      {transcripts.map((t, i) => (
+        <div key={i}>
+          <strong>{t.speaker}:</strong> {t.text}
+        </div>
+      ))}
+    </CardContent>
+  </Card>
+)}
     </div>
   )
 }

@@ -16,6 +16,8 @@ export type RecorderStatus = "idle" | "requesting" | "recording" | "paused"
 interface UseRecorderOptions {
   chunkDuration?: number
   deviceId?: string
+    onChunk?: (chunk: WavChunk) => void   // added
+
 }
 
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -109,6 +111,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
       timestamp: Date.now(),
     }
     setChunks((prev) => [...prev, chunk])
+    options.onChunk?.(chunk)
   }, [])
 
   const start = useCallback(async () => {
@@ -158,6 +161,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
             timestamp: Date.now(),
           }
           setChunks((prev) => [...prev, chunk])
+          options.onChunk?.(chunk)
         }
       }
 
